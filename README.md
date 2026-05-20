@@ -34,17 +34,24 @@ Every AI agent memory system today treats memory as a flat retrieval problem: st
 ### Install
 
 ```bash
-pip install nexus-memory
-```
-
-Or install from source:
-```bash
 git clone https://github.com/bozoinc/nexus-memory.git
 cd nexus-memory
 pip install -e .
 ```
 
+Or with pipx (recommended for CLI tools):
+```bash
+pipx install git+https://github.com/bozoinc/nexus-memory.git
+```
+
+For the MCP server only:
+```bash
+pipx install "git+https://github.com/bozoinc/nexus-memory.git#egg=nexus-mcp"
+```
+
 ### CLI Usage
+
+After `pip install -e .`:
 
 ```bash
 # Add a memory
@@ -61,6 +68,12 @@ nexus list
 
 # Get memory stats
 nexus stats
+```
+
+Or run directly without installing:
+```bash
+python -m nexus add "..." --category decision
+python -m nexus search "..."
 ```
 
 ### MCP Server (for Claude Code, Cursor, Windsurf, etc.)
