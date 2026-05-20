@@ -256,8 +256,12 @@ class NexusStorage:
     
     def search(self, query: str = None, category: str = None, source_agent: str = None,
                since: int = None, until: int = None, limit: int = 20,
-               mode: str = 'keyword', current_project: str = None) -> list:
-        """Search memories by keyword, temporal range, or causal chain."""
+               mode: str = 'keyword', current_project: str = None,
+               match_mode: str = 'AND') -> list:
+        """Search memories by keyword, temporal range, or causal chain.
+        
+        match_mode: 'AND' requires all terms to match (precise), 'OR' matches any term (broad).
+        """
         
         if mode == 'temporal' and not query:
             # Time-based search
@@ -292,11 +296,12 @@ class NexusStorage:
             if query:
                 # Sanitize FTS5 query: replace dots and special chars
                 safe_query = query.replace('.', ' ').replace('-', ' ').strip()
-                # Split into terms and join with AND for better matching
+                # Split into terms and join with AND or OR
                 terms = [t for t in safe_query.split() if len(t) >= 2]
                 if not terms:
                     terms = [safe_query]
-                fts_query = ' AND '.join(terms)
+                joiner = ' AND ' if match_mode == 'AND' else ' OR '
+                fts_query = joiner.join(terms)
                 try:
                     rows = self.conn.execute(
                         """SELECT m.* FROM memories m

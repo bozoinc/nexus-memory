@@ -34,41 +34,94 @@ Every AI agent memory system today treats memory as a flat retrieval problem: st
 ### Install
 
 ```bash
+pip install nexus-memory
+```
+
+Or install from source:
+```bash
 git clone https://github.com/bozoinc/nexus-memory.git
 cd nexus-memory
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### CLI Usage
 
 ```bash
 # Add a memory
-python -m nexus add "We decided to use PostgreSQL for the project" --category decision --tags database,backend
+nexus add "We decided to use PostgreSQL for the project" --category decision --tags database,backend
 
 # Search memories
-python -m nexus search "database decision"
+nexus search "database decision"
 
 # Ask in natural language
-python -m nexus ask "What did we decide about the database?"
+nexus ask "What did we decide about the database?"
 
 # List all memories
-python -m nexus list
+nexus list
 
 # Get memory stats
-python -m nexus stats
-
-# Create a snapshot
-python -m nexus snapshot "before-refactor"
-
-# Run consolidation
-python -m nexus consolidate
+nexus stats
 ```
+
+### MCP Server (for Claude Code, Cursor, Windsurf, etc.)
+
+Add to your MCP client config:
+
+**Claude Code** (`~/.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "nexus-mcp"
+    }
+  }
+}
+```
+
+**Cursor** (`~/.cursor/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "nexus-mcp"
+    }
+  }
+}
+```
+
+**Generic (any MCP client)**:
+```json
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "python",
+      "args": ["-m", "nexus_mcp.server"],
+      "env": {
+        "NEXUS_DB": "~/.nexus/memory.db"
+      }
+    }
+  }
+}
+```
+
+Available MCP tools:
+- `nexus_add_memory` — Store a new memory
+- `nexus_search` — Search memories by keyword
+- `nexus_ask` — Natural language question answering
+- `nexus_list` — List recent memories
+- `nexus_get` — Get a memory by ID
+- `nexus_delete` — Delete a memory
+- `nexus_stats` — Memory statistics
+- `nexus_consolidate` — Run memory consolidation
+- `nexus_export` — Export all memories (JSON or Markdown)
+- `nexus_predict` — Predict context needed
 
 ### HTTP API
 
 ```bash
 # Start the API server
-python -m nexus serve --port 1818
+python -m nexus_mcp.server  # or use the CLI
+python -c "from src.api import app; import uvicorn; uvicorn.run(app, host='127.0.0.1', port=1818)"
 
 # Add a memory
 curl -X POST http://localhost:1818/api/memory/add \
@@ -77,9 +130,6 @@ curl -X POST http://localhost:1818/api/memory/add \
 
 # Search
 curl "http://localhost:1818/api/memory/search?q=database"
-
-# Ask
-curl "http://localhost:1818/api/memory/ask?q=what did we decide about the database"
 ```
 
 ### Python API

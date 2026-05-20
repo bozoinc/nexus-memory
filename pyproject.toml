@@ -38,6 +38,7 @@ dev = [
 
 [project.scripts]
 nexus = "nexus:main"
+nexus-mcp = "nexus_mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/bozoinc/nexus-memory"
