@@ -1,0 +1,211 @@
+# NEXUS — Neural Experience Unified Storage
+
+**Local-first, cross-agent AI memory system.** SQLite backend with FTS5 search, natural language interface, memory versioning, predictive preloading, emotional weighting, salience scoring, consolidation, and cross-agent sync.
+
+## Why NEXUS?
+
+Every AI agent memory system today treats memory as a flat retrieval problem: store facts → search → inject into prompt. NEXUS treats memory as a **living cognitive architecture** — memory that reasons about itself, restructures itself, grows organically, and predicts what will be needed before it's asked for.
+
+**Key differentiators:**
+- **Local-first** — No cloud. No API keys. No subscription. Your data stays on your machine.
+- **Cross-agent** — Share memory across Hermes, OpenClaw, Claude Code, Cursor, and any MCP-compatible agent.
+- **Versioning** — Git-like snapshots and branches for memory. Roll back, fork, merge.
+- **Prediction** — Preloads memories you'll need before you ask.
+- **Emotional weighting** — Memories carry emotional context, not just facts.
+- **NL interface** — Ask questions in plain English. "What did we decide about the database?"
+- **Consolidation** — Automatic memory consolidation (like human sleep cycles).
+- **Open source** — MIT license. Free forever.
+
+## Competitive Position
+
+| Capability | NEXUS | Mem0 | Hindsight | Zep | Vektor | Letta |
+|------------|-------|------|-----------|-----|--------|-------|
+| Local-first | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Cross-agent | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Versioning | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Prediction | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Emotional weight | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| NL interface | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Python SDK | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ |
+| MCP server | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+
+## Quick Start
+
+### Install
+
+```bash
+git clone https://github.com/bozoinc/nexus-memory.git
+cd nexus-memory
+pip install -r requirements.txt
+```
+
+### CLI Usage
+
+```bash
+# Add a memory
+python -m nexus add "We decided to use PostgreSQL for the project" --category decision --tags database,backend
+
+# Search memories
+python -m nexus search "database decision"
+
+# Ask in natural language
+python -m nexus ask "What did we decide about the database?"
+
+# List all memories
+python -m nexus list
+
+# Get memory stats
+python -m nexus stats
+
+# Create a snapshot
+python -m nexus snapshot "before-refactor"
+
+# Run consolidation
+python -m nexus consolidate
+```
+
+### HTTP API
+
+```bash
+# Start the API server
+python -m nexus serve --port 1818
+
+# Add a memory
+curl -X POST http://localhost:1818/api/memory/add \
+  -H "Content-Type: application/json" \
+  -d '{"content": "We decided to use PostgreSQL", "category": "decision"}'
+
+# Search
+curl "http://localhost:1818/api/memory/search?q=database"
+
+# Ask
+curl "http://localhost:1818/api/memory/ask?q=what did we decide about the database"
+```
+
+### Python API
+
+```python
+from src.storage import NexusStorage
+
+db = NexusStorage()
+
+# Add memory
+mem = db.add_memory(
+    content="We decided to use PostgreSQL for the project",
+    category="decision",
+    tags=["database", "backend"],
+    emotional_weight=0.7
+)
+
+# Search
+results = db.search("database decision")
+
+# Get stats
+stats = db.stats()
+print(f"Total memories: {stats['total_memories']}")
+
+db.close()
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│              NEXUS MEMORY SYSTEM                 │
+├─────────────────────────────────────────────────┤
+│                                                   │
+│  ┌──────────┐ ┌───────────┐ ┌────────────────┐  │
+│  │ NL Memory│ │ Predictive│ │   Memory       │  │
+│  │ Interface│ │ Preloader │ │   Consolidator │  │
+│  └────┬─────┘ └─────┬─────┘ └───────┬────────┘  │
+│       │              │               │            │
+│  ┌────▼──────────────▼───────────────▼────────┐  │
+│  │        Episodic-Temporal Graph             │  │
+│  │      (SQLite + Graph Relations + FTS5)     │  │
+│  └────────────────────┬───────────────────────┘  │
+│                       │                           │
+│  ┌────────────────────▼───────────────────────┐  │
+│  │        Semantic Compression Engine          │  │
+│  └────────────────────┬───────────────────────┘  │
+│                       │                           │
+│  ┌────────────────────▼───────────────────────┐  │
+│  │        Cross-Agent Memory Mesh              │  │
+│  │  (Hermes, OpenClaw, Claude Code, Cursor)   │  │
+│  └────────────────────────────────────────────┘  │
+│                                                   │
+│  ┌────────────────────────────────────────────┐  │
+│  │       Memory Versioning & Branching         │  │
+│  └────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────┘
+```
+
+## Project Structure
+
+```
+nexus/
+├── nexus                    # CLI entry point
+├── src/
+│   ├── storage.py           # SQLite + FTS5 storage engine
+│   ├── api.py               # HTTP API server (FastAPI)
+│   ├── nl_interface.py      # Natural language interface
+│   ├── predictor.py         # Predictive preloading
+│   ├── consolidation.py     # Memory consolidation engine
+│   ├── cross_agent_sync.py  # Cross-agent sync
+│   ├── versioning.py        # Git-like versioning
+│   ├── salience.py          # Salience scoring
+│   └── nexus_hermes.py      # Hermes integration
+├── tests/
+│   └── test_storage.py      # 22 tests, all passing
+├── requirements.txt
+├── LICENSE
+└── README.md
+```
+
+## Cross-Agent Sync
+
+NEXUS can sync memory across multiple AI agents:
+
+- **Hermes Agent** — Native integration via skill
+- **OpenClaw** — Bidirectional sync with workspace .md files
+- **Claude Code** — CLAUDE.md context generation
+- **Cursor IDE** — .cursorrules context generation
+
+```bash
+# Register an agent
+python -m nexus agents register claude-code --categories decisions,preferences,context
+
+# Sync all agents
+python -m nexus sync
+
+# Generate context for a specific agent
+python -m nexus context claude-code
+```
+
+## Roadmap
+
+- [x] Core storage engine (SQLite + FTS5)
+- [x] Natural language interface
+- [x] Predictive preloading
+- [x] Memory consolidation
+- [x] Cross-agent sync
+- [x] Versioning and branching
+- [x] Salience scoring
+- [x] Emotional weighting
+- [x] HTTP API server
+- [x] CLI interface
+- [ ] MCP server (in progress)
+- [ ] LongMemEval benchmarks
+- [ ] TypeScript SDK
+- [ ] Managed hosting option
+
+## Benchmarks
+
+*Coming soon. LongMemEval evaluation in progress.*
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
+## Credits
+
+Built by OWL for Tansi. Designed for Sturgeon Lake First Nation and the Indigenous tech community. Open source for everyone.

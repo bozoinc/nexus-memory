@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""
+NEXUS — CLI entry point.
+Usage: python -m nexus <command> [args]
+"""
+
+import sys
+import json
+import os
+from pathlib import Path
+from datetime import datetime
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from src.storage import NexusStorage, _now_ms
+from src.consolidation import ConsolidationEngine
+
+
+def cmd_add(args):
+    content = ' '.join(args.get('positional', []))
+    if not content:
+        print("Error: No content provided. Usage: nexus add 'memory content'")
+        return
+    
+    db = NexusStorage()
+    mem = db.add_memory(
+        content=content,
+        category=args.get('--category', 'general'),
+        source_agent=args.get('--agent', 'hermes'),
+        tags=args.get('--tags', '').split(',') if args.get('--tags') else [],
+        emotional_weight=float(args.get('--weight', 0.5))
+    )
+    print(f"Added: {mem['id'][:16]}... [{mem['category']}] salience={mem['salience']:.3f}")
+    db.close()
+
+
+def cmd_search(args):
+    query = ' '.join(args.get('positional', []))
+    db = NexusStorage()
+    results = db.search(
+        query=query if query else None,
+        category=args.get('--category'),
+        mode=args.get('--mode', 'keyword'),
+        current_project=args.get('--project'),
+        limit=int(args.get('--limit', 20))
+    )
+    
+    if not results:
+        print("No memories found.")
+    else:
+        print(f"Found {len(results)} memories:")
+        for r in results:
+            tags = json.loads(r.get('tags', '[]'))
+            tag_str = ', '.join(tags[:3]) if tags else ''
+            print(f"  [{r['salience']:.2f}] {r['id'][:12]} | {r['category']} | {r['content'][:80]}... | {tag_str}")
+    db.close()
+
+
+def cmd_graph(args):
+    mem_id = args.get('positional', [None])[0]
+    if not mem_id:
+        print("Error: No memory ID. Usage: nexus graph <memory-id>")
+        return
+    
+    db = NexusStorage()
+    nodes = db.get_graph_neighborhood(mem_id, depth=int(args.get('--depth', 2)))
+    print(f"Graph neighborhood of {mem_id[:12]}... ({len(nodes)} nodes):")
+    for n in nodes:
+        print(f"  → {n['id'][:12]} | {n['category']} | {n['content'][:60]}...")
+    db.close()
+
+
+def cmd_consolidate(args):
+    engine = ConsolidationEngine()
+    dry = '--dry-run' in args
+    stats = engine.run(dry_run=dry)
+    print(f"Consolidation {'(dry run) ' if dry else ''}complete:")
+    print(f"  Input: {stats['input']} | Output: {stats['output']}")
+    print(f"  Merged: {stats['merged']} | Pruned: {stats['pruned']}")
+    print(f"  Duration: {stats['duration_ms']}ms")
+
+
+def cmd_predict(args):
+    from src.predictor import PredictivePreloader
+    p = PredictivePreloader()
+    project = args.get('--project')
+    result = p.predict(project_context=project, limit=int(args.get('--limit', 10)))
+    
+    ctx = result['context']
+    print(f"Predicted context for {ctx['weekday_name']} {ctx['hour']:02d}:00, project='{ctx['project']}'")
+    print(f"Confidence: {result['confidence']:.0%}")
+    print(f"Predicted categories: {', '.join(result['predicted_categories'])}")
+    print()
+    for m in result['predicted_memories'][:5]:
+        w = m.get('prediction_weight', 0)
+        print(f"  [{m['salience']:.2f}] (w={w}) {m['content'][:70]}...")
+
+
+def cmd_stats(args):
+    db = NexusStorage()
+    s = db.stats()
+    print(f"NEXUS Memory Statistics:")
+    print(f"  Total memories: {s['total_memories']}")
+    print(f"  Total edges: {s['total_edges']}")
+    print(f"  Avg salience: {s['avg_salience']}")
+    print(f"  DB size: {s['db_size_mb']} MB")
+    print(f"  DB path: {s['db_path']}")
+    if s['by_category']:
+        print(f"  By category: {json.dumps(s['by_category'], indent=4)}")
+    if s['by_agent']:
+        print(f"  By agent: {json.dumps(s['by_agent'], indent=4)}")
+    db.close()
+
+
+def cmd_import(args):
+    path = args.get('positional', [None])[0]
+    db = NexusStorage()
+    
+    if path == 'hermes' or path is None:
+        results = db.import_hermes_memory()
+        print(f"Imported from Hermes memory:")
+        for category, count in results.items():
+            print(f"  {category}: {count} memories")
+    else:
+        count = db.import_from_markdown(path)
+        print(f"Imported {count} memories from {path}")
+    db.close()
+
+
+def cmd_export(args):
+    fmt = args.get('--format', 'json')
+    output = args.get('--output', f'nexus-export-{_now_ms()}.{fmt}')
+    
+    db = NexusStorage()
+    rows = db.conn.execute("SELECT * FROM memories ORDER BY created_at").fetchall()
+    memories = [dict(r) for r in rows]
+    
+    if fmt == 'json':
+        with open(output, 'w') as f:
+            json.dump(memories, f, indent=2, default=str)
+    elif fmt == 'md':
+        with open(output, 'w') as f:
+            f.write("# NEXUS Memory Export\n\n")
+            for m in memories:
+                f.write(f"## {m['category']} - {m['id'][:12]}\n")
+                f.write(f"{m['content']}\n\n")
+    
+    print(f"Exported {len(memories)} memories to {output}")
+    db.close()
+
+
+def cmd_serve(args):
+    import uvicorn
+    port = int(args.get('--port', 1919))
+    print(f"Starting NEXUS API server on port {port}...")
+    uvicorn.run("src.api:app", host="127.0.0.1", port=port, reload=False)
+
+
+def cmd_snapshot(args):
+    from src.versioning import MemoryVersioning
+    v = MemoryVersioning()
+    name = args.get('--name')
+    meta = v.snapshot(name)
+    print(f"Snapshot created: {meta['name']} ({meta['stats']['total_memories']} memories)")
+
+def cmd_snapshots(args):
+    from src.versioning import MemoryVersioning
+    v = MemoryVersioning()
+    snaps = v.list_snapshots()
+    if not snaps:
+        print("No snapshots found.")
+    else:
+        print(f"Snapshots ({len(snaps)}):")
+        for s in snaps:
+            print(f"  {s['name']} — {s['stats']['total_memories']} memories — {s['created_at']}")
+
+def cmd_branch(args):
+    from src.versioning import MemoryVersioning
+    v = MemoryVersioning()
+    branch_name = args.get('positional', [None])[0]
+    if not branch_name:
+        print("Error: No branch name. Usage: nexus branch <name>")
+        return
+    result = v.branch(branch_name, from_snapshot=args.get('--from-snapshot'))
+    print(f"Branch created: {result['branch']} ({result['memory_count']} memories)")
+
+def cmd_branches(args):
+    from src.versioning import MemoryVersioning
+    v = MemoryVersioning()
+    branches = v.list_branches()
+    print(f"Branches ({len(branches)}):")
+    for b in branches:
+        print(f"  {b['name']} — {b['memory_count']} memories")
+
+def cmd_rollback(args):
+    from src.versioning import MemoryVersioning
+    v = MemoryVersioning()
+    name = args.get('positional', [None])[0]
+    if not name:
+        print("Error: No snapshot name. Usage: nexus rollback <name>")
+        return
+    if v.rollback(name):
+        print(f"Rolled back to snapshot: {name}")
+    else:
+        print(f"Snapshot not found: {name}")
+
+def cmd_diff(args):
+    from src.versioning import MemoryVersioning
+    v = MemoryVersioning()
+    snapshots = args.get('positional', [])
+    if len(snapshots) < 1:
+        print("Error: Usage: nexus diff <snapshot-a> [snapshot-b]")
+        return
+    result = v.diff(snapshots[0], snapshots[1] if len(snapshots) > 1 else None)
+    print(json.dumps(result, indent=2, default=str))
+
+
+def cmd_ask(args):
+    """Natural language memory interface."""
+    from src.nl_interface import NLMemoryInterface
+    query = ' '.join(args.get('positional', []))
+    if not query:
+        print("Error: No query. Usage: nexus ask 'your question'")
+        return
+    nl = NLMemoryInterface()
+    result = nl.process(query)
+    print(result.get('message', ''))
+
+
+# --- Cross-Agent Sync Command Functions ---
+
+def cmd_agents(args):
+    from src.cross_agent_sync import CrossAgentSync
+    sync = CrossAgentSync()
+    agents = sync.get_agent_status()
+    
+    if not agents:
+        print("No agents registered. Use 'nexus register' to add agents.")
+        return
+    
+    print(f"Registered agents ({len(agents)}):")
+    for a in agents:
+        last_seen = datetime.fromtimestamp(a['last_seen'] / 1000).strftime('%Y-%m-%d %H:%M') if a.get('last_seen') else 'never'
+        print(f"  {a['id']:15s} | {a['name']:20s} | {a['type']:5s} | last seen: {last_seen}")
+
+def cmd_sync(args):
+    from src.cross_agent_sync import CrossAgentSync
+    from datetime import datetime
+    
+    sync = CrossAgentSync()
+    agent_id = args.get('positional', [None])[0]
+    
+    if agent_id:
+        result = sync.sync_agent(agent_id)
+        print(f"Sync {agent_id}:")
+        for k, v in result.items():
+            print(f"  {k}: {v}")
+    else:
+        results = sync.sync_all()
+        print("Sync all agents:")
+        for aid, result in results.items():
+            imp = result.get('imported', 0)
+            exp = result.get('exported', 0)
+            print(f"  {aid}: imported={imp}, exported={exp}")
+
+def cmd_register(args):
+    from src.cross_agent_sync import CrossAgentSync
+    
+    agent_id = args.get('positional', [None])[0]
+    if not agent_id:
+        print("Error: No agent ID. Usage: nexus register <agent-id>")
+        return
+    
+    name = args.get('--name', agent_id)
+    agent_type = args.get('--type', 'file')
+    workspace = args.get('--workspace')
+    categories = args.get('--categories', '').split(',') if args.get('--categories') else None
+    
+    sync = CrossAgentSync()
+    result = sync.register_agent(agent_id, name, agent_type, workspace=workspace, categories=categories)
+    print(f"Registered: {result['agent_id']} ({result['name']}) type={result['type']}")
+
+def cmd_context(args):
+    from src.cross_agent_sync import CrossAgentSync
+    
+    agent_id = args.get('positional', ['hermes'])[0]
+    limit = int(args.get('--limit', 20))
+    
+    sync = CrossAgentSync()
+    context = sync.get_shared_context(agent_id, limit=limit)
+    
+    print(f"Shared context for {agent_id} ({context['count']} memories):")
+    print(f"  Categories: {', '.join(context['categories'])}")
+    print(f"  Salience threshold: {context['threshold']}")
+    print()
+    for m in context['memories'][:10]:
+        print(f"  [{m['salience']:.2f}] {m['source_agent']:10s} | {m['content'][:70]}...")
+
+def cmd_resolve(args):
+    from src.cross_agent_sync import CrossAgentSync
+    
+    strategy = args.get('--strategy', 'nexus_wins')
+    sync = CrossAgentSync()
+    result = sync.resolve_conflicts(strategy=strategy)
+    print(f"Conflict resolution ({strategy}):")
+    print(f"  Conflicts found: {result['conflicts_found']}")
+    print(f"  Resolved: {result['resolved']}")
+
+
+def parse_args(argv):
+    """Simple arg parser."""
+    args = {'positional': []}
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a.startswith('--'):
+            if i + 1 < len(argv) and not argv[i+1].startswith('--'):
+                args[a] = argv[i+1]
+                i += 2
+            else:
+                args[a] = True
+                i += 1
+        else:
+            args['positional'].append(a)
+            i += 1
+    return args
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help', 'help'):
+        print("NEXUS — Neural Experience Unified Storage")
+        print("Usage: nexus <command> [options]")
+        print("")
+        print("Commands:")
+        print("  add 'content'        Add a memory")
+        print("  search 'query'       Search memories")
+        print("  graph <id>           Show graph neighborhood")
+        print("  consolidate          Run consolidation engine")
+        print("  predict              Predict context for current time")
+        print("  stats                Show statistics")
+        print("  import [hermes|path] Import from Hermes or markdown file")
+        print("  export               Export memories")
+        print("  serve                Start API server")
+        return
+    
+    cmd = sys.argv[1]
+    func = COMMANDS.get(cmd)
+    if not func:
+        print(f"Unknown command: {cmd}. Run 'nexus --help' for usage.")
+        return
+    
+    args = parse_args(sys.argv[2:])
+    func(args)
+
+
+# --- Command Registry (must be after all function definitions) ---
+
+COMMANDS = {
+    'add': cmd_add,
+    'search': cmd_search,
+    'graph': cmd_graph,
+    'consolidate': cmd_consolidate,
+    'predict': cmd_predict,
+    'stats': cmd_stats,
+    'import': cmd_import,
+    'export': cmd_export,
+    'serve': cmd_serve,
+    'snapshot': cmd_snapshot,
+    'snapshots': cmd_snapshots,
+    'branch': cmd_branch,
+    'branches': cmd_branches,
+    'rollback': cmd_rollback,
+    'diff': cmd_diff,
+    'ask': cmd_ask,
+    'agents': cmd_agents,
+    'sync': cmd_sync,
+    'register': cmd_register,
+    'context': cmd_context,
+    'resolve': cmd_resolve,
+}
+
+
+if __name__ == "__main__":
+    main()
