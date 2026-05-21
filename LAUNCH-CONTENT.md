@@ -37,7 +37,7 @@ The competitive landscape:
 
 NEXUS is the only system I'm aware of that combines local-first + cross-agent + versioning + prediction + emotional weighting + NL interface + consolidation + MCP server support + open source + zero cost. If I'm missing something, I genuinely want to know.
 
-Install: `pip install nexus-memory`, then run `nexus-mcp` to start the MCP server. Point your MCP client at it. Done.
+Install: `pip install nexus-local`, then run `nexus-mcp` to start the MCP server. Point your MCP client at it. Done.
 
 Built by Tansi for Sturgeon Lake First Nation.
 
@@ -72,7 +72,7 @@ Mem0 is cloud-only and costs $249/mo at scale. Your memories leave your machine.
 **Install:**
 
 ```
-pip install nexus-memory
+pip install nexus-local
 nexus-mcp
 ```
 
@@ -124,7 +124,7 @@ Mem0 charges $249/mo and your data lives in their cloud. Hindsight and Zep are c
 NEXUS is the only system combining local-first + cross-agent + versioning + prediction + emotional weighting + MCP server + open source + zero cost.
 
 **Tweet 7 (CTA):**
-Install: `pip install nexus-memory`
+Install: `pip install nexus-local`
 Repo: https://github.com/bozoinc/nexus-memory
 
 Built by Tansi for Sturgeon Lake First Nation. Star it if you think AI memory should be free and local.
