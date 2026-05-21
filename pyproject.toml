@@ -1,13 +1,12 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "nexus-memory"
+name = "nexus-local"
 version = "0.1.0"
 description = "Local-first, cross-agent AI memory system"
 readme = "README.md"
-license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Tansi", email = "bozoinc@proton.me"}
@@ -37,10 +36,13 @@ dev = [
 ]
 
 [project.scripts]
-nexus = "nexus:main"
+nexus = "src.nexus_cli:main"
 nexus-mcp = "nexus_mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/bozoinc/nexus-memory"
 Repository = "https://github.com/bozoinc/nexus-memory"
 Issues = "https://github.com/bozoinc/nexus-memory/issues"
+
+[tool.setuptools]
+packages = ["src", "nexus_mcp"]
